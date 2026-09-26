@@ -241,17 +241,11 @@ export default function CanvasStage() {
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         const st = useStore.getState();
         if (!st.selectedId) return;
-        const src = st.entities.find((en) => en.id === st.selectedId);
-        if (!src) return;
         e.preventDefault();
         const step = e.shiftKey ? (st.grid || 10) : 1;
         const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
         const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
-        if (src.points) {
-          st.updateEntity(src.id, { points: src.points.map((v, i) => (i % 2 === 0 ? v + dx : v + dy)) });
-        } else {
-          st.updateEntity(src.id, { x: (src.x ?? 0) + dx, y: (src.y ?? 0) + dy });
-        }
+        st.nudge(dx, dy);
         return;
       }
       if (e.key === 'r' || e.key === 'R') {

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useStore } from '../store';
 import {
   fmtLen, roomArea, normalizeAngle, angleOf, rotateSegment, setSegmentLength, pathLen,
@@ -81,11 +82,16 @@ export default function PropsPanel() {
   const sceneEntities = s.entities.filter((e) => (e.sceneId ?? 'plan') === s.activeSceneId);
   const sel = sceneEntities.find((e) => e.id === s.selectedId) ?? null;
   const unitSuffix = s.unit === 'm' ? 'm / cm' : 'ft / in';
+  // touch D-pad step: 1px fine nudges, or one grid cell per tap
+  const [nudgeBig, setNudgeBig] = useState(false);
+  const nudgeStep = nudgeBig ? (s.grid || 10) : 1;
+  // furniture library starts collapsed to keep the panel tidy
+  const [showFurniture, setShowFurniture] = useState(false);
 
   const badLen = (v: string) => alert(`Can't parse "${v}". Try e.g. ${s.unit === 'ft' ? `10ft, 10'6", 36in` : '3m, 250cm'}.`);
 
   return (
-    <div className="no-print" style={{ width: 260, background: 'white', borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', fontSize: 13 }}>
+    <div className="no-print" style={{ width: 260, flexShrink: 0, minHeight: 0, background: 'white', borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', fontSize: 13 }}>
       <div style={{ padding: 10, borderBottom: '1px solid #f1f5f9' }}>
         <div style={{ fontWeight: 700, marginBottom: 6 }}>Sketch settings</div>
         <div style={{ marginBottom: 6 }}>
@@ -116,8 +122,17 @@ export default function PropsPanel() {
       </div>
 
       <div style={{ padding: 10, borderBottom: '1px solid #f1f5f9' }}>
-        <div style={{ fontWeight: 700, marginBottom: 6 }}>🪑 Furniture & Kitchen <span style={{ fontWeight: 400, color: '#64748b', fontSize: 11 }}>(click, then click canvas)</span></div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
+        <button
+          onClick={() => setShowFurniture((v) => !v)}
+          title="Show/hide the furniture library"
+          style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13, color: '#0f172a', width: '100%', textAlign: 'left' }}
+        >
+          <span style={{ width: 14 }}>{showFurniture ? '▼' : '▶'}</span>
+          <span>🪑 Furniture & Kitchen</span>
+          <span style={{ fontWeight: 400, color: '#64748b', fontSize: 11 }}>(click, then click canvas)</span>
+        </button>
+        {showFurniture && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4, marginTop: 6 }}>
           {SYMBOLS.map((sym) => (
             <button
               key={sym.id} title={`${sym.name} — real size ${sym.size}`}
@@ -133,6 +148,7 @@ export default function PropsPanel() {
             </button>
           ))}
         </div>
+        )}
         {s.pendingSymbol && (
           <div style={{ marginTop: 6, fontSize: 12, color: '#6d28d9' }}>
             Placing <b>{SYMBOL_MAP[s.pendingSymbol]?.name}</b> ({SYMBOL_MAP[s.pendingSymbol]?.size}) — click canvas, Esc to stop.{' '}
@@ -141,7 +157,7 @@ export default function PropsPanel() {
         )}
       </div>
 
-      <div style={{ padding: 10, flex: 1, overflowY: 'auto' }}>
+      <div style={{ padding: 10, flex: 1, minHeight: 0, overflowY: 'auto' }}>
         <div style={{ fontWeight: 700, marginBottom: 6 }}>Properties {sel ? `— ${sel.type === 'symbol' ? SYMBOL_MAP[sel.symbol ?? '']?.name ?? sel.type : sel.type}` : ''}</div>
         {!sel && <div style={{ color: '#64748b' }}>Select an object to edit exact sizes and colors. Use ✏️ Pen for freehand sketching. Ctrl+Z undo, Ctrl+Shift+Z redo.</div>}
         {sel && (
@@ -242,6 +258,27 @@ export default function PropsPanel() {
               </div>
             )}
             {sel.type === 'text' && <Field label="Font size" width={64} defaultValue={sel.fontSize ?? 16} onCommit={(v) => { const n = parseFloat(v); if (Number.isFinite(n)) s.updateEntity(sel.id, { fontSize: n }); }} />}
+            {/* touch nudge pad: arrow-key nudging for tablets (no keyboard) */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <span style={{ color: '#475569' }}>Nudge</span>
+                <button
+                  title={nudgeBig ? 'Tap for 1px steps' : `Tap for ${s.grid || 10}px steps`}
+                  onClick={() => setNudgeBig((v) => !v)}
+                  style={nudgeBig ? { background: '#dbeafe' } : {}}
+                >
+                  step: {nudgeBig ? `${s.grid || 10}px` : '1px'}
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <button onClick={() => s.nudge(0, -nudgeStep)} style={{ width: 64 }} title="Nudge up">↑</button>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button onClick={() => s.nudge(-nudgeStep, 0)} style={{ width: 64 }} title="Nudge left">←</button>
+                  <button onClick={() => s.nudge(nudgeStep, 0)} style={{ width: 64 }} title="Nudge right">→</button>
+                </div>
+                <button onClick={() => s.nudge(0, nudgeStep)} style={{ width: 64 }} title="Nudge down">↓</button>
+              </div>
+            </div>
             <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
               <button onClick={() => { navigator.clipboard.writeText(JSON.stringify(sel)); }}>Copy JSON</button>
               <button onClick={() => s.removeEntity(sel.id)} style={{ color: 'red' }}>Delete</button>

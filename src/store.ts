@@ -51,6 +51,8 @@ type State = {
   addEntity: (e: CadEntity) => void;
   updateEntity: (id: string, patch: Partial<CadEntity>, transient?: boolean) => void;
   removeEntity: (id: string) => void;
+  /** move the selected object by dx/dy px (arrow keys on laptop, D-pad on touch) */
+  nudge: (dx: number, dy: number) => void;
   /** auto-dim mode: pin/remove measurement lines for one object (each tap = one undo step) */
   toggleAutoDimFor: (id: string) => void;
   setEntities: (e: CadEntity[]) => void;
@@ -230,6 +232,15 @@ export const useStore = create<State>()((set, get) => ({
     set((s) => {
       if (!s.entities.some((e) => e.id === id)) return s; // tap+click double-fire on touch: ignore the echo
       return { ...withHistory(s, s.entities.filter((e) => e.id !== id)), selectedId: null };
+    }),
+  nudge: (dx, dy) =>
+    set((s) => {
+      const src = s.entities.find((e) => e.id === s.selectedId);
+      if (!src || (!dx && !dy)) return s;
+      const patch = src.points
+        ? { points: src.points.map((v, i) => (i % 2 === 0 ? v + dx : v + dy)) }
+        : { x: (src.x ?? 0) + dx, y: (src.y ?? 0) + dy };
+      return withHistory(s, s.entities.map((e) => (e.id === src.id ? { ...e, ...patch } : e)));
     }),
   toggleAutoDimFor: (id) =>
     set((s) => {

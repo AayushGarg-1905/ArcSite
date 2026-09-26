@@ -22,7 +22,7 @@ export default function Toolbar() {
   const s = useStore();
   const { tool, setTool } = s;
   return (
-    <div className="no-print" style={{ width: 148, background: '#0f172a', color: 'white', display: 'flex', flexDirection: 'column', padding: 8, gap: 4 }}>
+    <div className="no-print" style={{ width: 148, flexShrink: 0, minHeight: 0, overflowY: 'auto', background: '#0f172a', color: 'white', display: 'flex', flexDirection: 'column', padding: 8, gap: 4 }}>
       <div style={{ fontSize: 12, opacity: 0.7, padding: '4px 6px' }}>TOOLS</div>
       {TOOLS.map((t) => (
         <button
