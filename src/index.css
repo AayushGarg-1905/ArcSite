@@ -1,0 +1,15 @@
+* { box-sizing: border-box; }
+html, body, #app { margin: 0; height: 100%; }
+html, body { overscroll-behavior: none; } /* stop pull-to-refresh hijacking canvas gestures */
+body { font-family: Inter, system-ui, Segoe UI, Roboto, sans-serif; background: #f8fafc; color: #0f172a; -webkit-tap-highlight-color: transparent; }
+button { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 9px; cursor: pointer; font-size: 13px; touch-action: manipulation; }
+button:hover { background: #e2e8f0; }
+input, select { border: 1px solid #cbd5e1; border-radius: 6px; padding: 3px 6px; font-size: 13px; }
+canvas { touch-action: none; } /* single-finger draw/drag on the canvas, no browser scrolling */
+@media (pointer: coarse) {
+  /* tablets/phones: 16px+ inputs stop iOS auto-zooming on focus, manipulation kills tap delay */
+  input, select, textarea, button { font-size: 16px; touch-action: manipulation; }
+}
+@media print {
+  .no-print { display: none !important; }
+}
