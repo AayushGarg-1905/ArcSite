@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../store';
+import { useUI } from '../lib/ui';
 import { CLOUD_READY, signInWithGoogle, signOutCloud } from '../lib/cloud';
 import { backendFor, flushSave } from '../store';
 
@@ -8,10 +9,10 @@ const fmtDate = (ts: number) =>
 
 export default function ProjectsDialog() {
     const s = useStore();
+    const ui = useUI();
     const [newName, setNewName] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
-    const [confirmDel, setConfirmDel] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
 
     if (!s.projectsOpen) return null;
@@ -22,7 +23,7 @@ export default function ProjectsDialog() {
             await signInWithGoogle();
             s.setBackendTab('cloud');
         } catch {
-            alert('Sign-in failed. Check popups / authorized domains in Firebase console.');
+            ui.toast('Sign-in failed. Check popups / authorized domains in Firebase console.', 'error');
         }
         setBusy(false);
     };
@@ -43,43 +44,44 @@ export default function ProjectsDialog() {
     const create = () => {
         if (!newName.trim()) return;
         if (s.backendTab === 'cloud' && !s.uid) {
-            alert('Sign in to create cloud projects.');
+            ui.toast('Sign in to create cloud projects.', 'error');
             return;
         }
         s.createProject(newName.trim());
         setNewName('');
     };
 
+    const del = async (id: string, name: string) => {
+        const ok = await ui.confirm(`"${name}" and everything drawn in it will be permanently deleted.`, {
+            title: 'Delete this project?', danger: true, confirmLabel: 'Delete',
+        });
+        if (ok) s.deleteProject(id);
+    };
+
     return (
-        <div
-            style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
-            onClick={() => s.setProjectsOpen(false)}
-        >
-            <div
-                style={{ background: 'white', borderRadius: 14, width: 720, maxWidth: '100%', maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <strong style={{ fontSize: 16 }}>📁 Projects</strong>
-                    <div style={{ display: 'flex', gap: 4, marginLeft: 8 }}>
-                        <button onClick={() => s.setBackendTab('local')} style={{ fontWeight: s.backendTab === 'local' ? 700 : 400 }}>💾 This device</button>
-                        <button onClick={() => s.setBackendTab('cloud')} style={{ fontWeight: s.backendTab === 'cloud' ? 700 : 400 }} title="Sync across devices via Google sign-in">☁ Cloud</button>
+        <div className="modal-overlay no-print" onClick={() => s.setProjectsOpen(false)}>
+            <div className="modal" style={{ width: 720, maxWidth: '100%' }} onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                    <span className="modal-title">📁 Projects</span>
+                    <div className="tabs" style={{ marginLeft: 8 }}>
+                        <button className={`tab-btn${s.backendTab === 'local' ? ' active' : ''}`} onClick={() => s.setBackendTab('local')}>💾 This device</button>
+                        <button className={`tab-btn${s.backendTab === 'cloud' ? ' active' : ''}`} onClick={() => s.setBackendTab('cloud')} title="Sync across devices via Google sign-in">☁ Cloud</button>
                     </div>
-                    <button onClick={() => s.setProjectsOpen(false)} style={{ marginLeft: 'auto' }}>✕</button>
+                    <button className="btn-icon btn-ghost" onClick={() => s.setProjectsOpen(false)} style={{ marginLeft: 'auto' }} aria-label="Close">✕</button>
                 </div>
 
-                <div style={{ padding: 16, overflowY: 'auto' }}>
+                <div className="modal-body">
                     {s.backendTab === 'cloud' && !CLOUD_READY && (
-                        <div style={{ background: '#fef9c3', border: '1px solid #fde047', borderRadius: 8, padding: 10, fontSize: 13, marginBottom: 12 }}>
+                        <div className="notice notice-warn">
                             <b>Cloud sync is off.</b> To open projects from any device: create a free Firebase project, enable
                             Firestore + Google sign-in, copy the web config into a <code>.env</code> file (see <code>.env.example</code>),
                             and restart the app. Until then, projects stay on this device.
                         </div>
                     )}
                     {s.backendTab === 'cloud' && CLOUD_READY && !s.uid && (
-                        <div style={{ textAlign: 'center', padding: '18px 0' }}>
-                            <p style={{ color: '#475569', fontSize: 14 }}>Sign in with Google to sync projects across your devices.</p>
-                            <button onClick={onSignIn} disabled={busy} style={{ fontSize: 14, padding: '8px 18px' }}>
+                        <div className="empty-block">
+                            <p style={{ color: 'var(--text-muted)' }}>Sign in with Google to sync projects across your devices.</p>
+                            <button className="btn-primary" onClick={onSignIn} disabled={busy}>
                                 {busy ? 'Signing in…' : '🔑 Sign in with Google'}
                             </button>
                         </div>
@@ -87,53 +89,51 @@ export default function ProjectsDialog() {
                     {(s.backendTab === 'local' || s.uid) && (
                         <>
                             {s.backendTab === 'cloud' && s.uid && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#475569', marginBottom: 10 }}>
+                                <div className="field-row" style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 10 }}>
                                     <span>Signed in as <b>{s.userEmail}</b> — projects auto-save here and sync to your other devices, even offline.</span>
-                                    <button onClick={onSignOut} disabled={busy} style={{ marginLeft: 'auto' }}>Sign out</button>
+                                    <button className="btn-ghost" onClick={onSignOut} disabled={busy} style={{ marginLeft: 'auto' }}>Sign out</button>
                                 </div>
                             )}
-                            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+                            <div className="field-row" style={{ marginBottom: 12, flexWrap: 'nowrap' }}>
                                 <input
                                     value={newName} onChange={(e) => setNewName(e.target.value)}
                                     onKeyDown={(e) => { if (e.key === 'Enter') create(); }}
                                     placeholder="New project name, e.g. Sharma residence" style={{ flex: 1 }}
                                 />
-                                <button onClick={create}>+ New project</button>
+                                <button className="btn-primary" onClick={create}>+ New project</button>
                             </div>
                             {s.projects.length === 0 && (
-                                <div style={{ color: '#64748b', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>
+                                <div className="empty-block">
                                     No projects here yet — create one above.
                                     {s.backendTab === 'local' && s.uid && ' Tip: older device-only projects can be uploaded with ⬆ on their cards.'}
                                 </div>
                             )}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+                            <div className="project-grid">
                                 {s.projects.map((p) => (
-                                    <div key={p.id} style={{ border: s.currentId === p.id ? '2px solid #2563eb' : '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', background: p.id === s.currentId ? '#eff6ff' : 'white' }}>
-                                        {p.thumbnail
-                                            ? <img src={p.thumbnail} alt="" style={{ width: '100%', height: 110, objectFit: 'cover', display: 'block', background: '#f1f5f9' }} />
-                                            : <div style={{ height: 110, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>🏠</div>}
-                                        <div style={{ padding: 8 }}>
+                                    <div key={p.id} className={`project-card${s.currentId === p.id ? ' current' : ''}`}>
+                                        <div className="project-thumb">
+                                            {p.thumbnail ? <img src={p.thumbnail} alt="" /> : '🏠'}
+                                        </div>
+                                        <div className="project-meta">
                                             {editingId === p.id ? (
                                                 <div style={{ display: 'flex', gap: 4 }}>
                                                     <input value={editName} onChange={(e) => setEditName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { s.renameProject(p.id, editName); setEditingId(null); } }} style={{ flex: 1, minWidth: 0 }} autoFocus />
-                                                    <button onClick={() => { s.renameProject(p.id, editName); setEditingId(null); }}>✓</button>
+                                                    <button className="btn-icon" onClick={() => { s.renameProject(p.id, editName); setEditingId(null); }}>✓</button>
                                                 </div>
                                             ) : (
-                                                <div style={{ fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={p.name}>
-                                                    {p.name} {s.currentId === p.id && <span style={{ color: '#2563eb' }}>• open</span>}
+                                                <div className="project-name" title={p.name}>
+                                                    {p.name} {s.currentId === p.id && <span style={{ color: 'var(--accent)' }}>• open</span>}
                                                 </div>
                                             )}
-                                            <div style={{ fontSize: 11, color: '#64748b', margin: '2px 0 6px' }}>{p.entityCount} objects • {fmtDate(p.updatedAt)}</div>
-                                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                                                <button onClick={() => s.openProject(p.id)} style={{ fontWeight: 600 }}>Open</button>
-                                                <button onClick={() => s.duplicateProject(p.id)} title="Duplicate">⧉</button>
-                                                <button onClick={() => { setEditingId(p.id); setEditName(p.name); }} title="Rename">✏️</button>
+                                            <div className="project-sub">{p.entityCount} objects • {fmtDate(p.updatedAt)}</div>
+                                            <div className="project-actions">
+                                                <button className="btn-sm" style={{ fontWeight: 600 }} onClick={() => s.openProject(p.id)}>Open</button>
+                                                <button className="btn-sm btn-icon" onClick={() => s.duplicateProject(p.id)} title="Duplicate">⧉</button>
+                                                <button className="btn-sm btn-icon" onClick={() => { setEditingId(p.id); setEditName(p.name); }} title="Rename">✏️</button>
                                                 {s.backendTab === 'local' && s.uid && (
-                                                    <button onClick={() => s.uploadToCloud(p.id)} title="Upload a copy to cloud">⬆</button>
+                                                    <button className="btn-sm btn-icon" onClick={() => s.uploadToCloud(p.id)} title="Upload a copy to cloud">⬆</button>
                                                 )}
-                                                {confirmDel === p.id
-                                                    ? <button onClick={() => { s.deleteProject(p.id); setConfirmDel(null); }} style={{ color: 'red', fontWeight: 700 }}>Sure?</button>
-                                                    : <button onClick={() => { setConfirmDel(p.id); setTimeout(() => setConfirmDel((c) => (c === p.id ? null : c)), 3000); }} title="Delete" style={{ color: 'red' }}>🗑</button>}
+                                                <button className="btn-sm btn-icon btn-danger" onClick={() => del(p.id, p.name)} title="Delete">🗑</button>
                                             </div>
                                         </div>
                                     </div>
@@ -142,8 +142,8 @@ export default function ProjectsDialog() {
                         </>
                     )}
                     {s.backendTab === 'local' && (
-                        <div style={{ marginTop: 12, fontSize: 12, color: '#64748b' }}>
-                            Stored in this browser ({backendFor('local', null).kind}). Use Import/Export (JSON/DXF) below for backups,
+                        <div className="notice notice-info" style={{ marginTop: 12, marginBottom: 0 }}>
+                            Stored in this browser ({backendFor('local', null).kind}). Use Import/Export (JSON/DXF) for backups,
                             or {CLOUD_READY ? 'open the ☁ Cloud tab and sign in to sync across devices.' : 'enable ☁ Cloud sync via Firebase (see .env.example).'}
                         </div>
                     )}

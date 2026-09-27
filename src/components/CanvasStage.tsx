@@ -9,6 +9,7 @@ import {
 } from '../lib/geometry';
 import { SYMBOL_MAP, fade } from '../lib/symbols';
 import { uid, type CadEntity, type SceneKind } from '../types';
+import { useUI } from '../lib/ui'
 
 type Pt = { x: number; y: number };
 
@@ -26,6 +27,7 @@ const isBoxLike = (t: string, kind: SceneKind) => isBox(t) || (kind === 'elevati
 
 export default function CanvasStage() {
   const s = useStore();
+  const ui = useUI();
   const stageRef = useRef<Konva.Stage>(null);
   const [cam, setCam] = useState({ x: 0, y: 0, scale: 1 });
   const camRef = useRef(cam);
@@ -310,11 +312,13 @@ export default function CanvasStage() {
     s.setSelected(id);
   };
 
-  const commitBox = (a: Pt, w: number, h: number) => {    const layer = 'rooms';
+  const commitBox = (a: Pt, w: number, h: number) => {
+    const layer = 'rooms';
     const cur = cursorRef.current;
     const x = cur && cur.x < a.x ? a.x - w : a.x;
     const y = cur && cur.y < a.y ? a.y - h : a.y;
-    const label = s.tool === 'room' ? prompt('Room name?', 'Room') ?? 'Room' : undefined;
+    // no blocking prompt: place with a default name, editable right away via the Label field in Properties
+    const label = s.tool === 'room' ? 'Room' : undefined;
     const id = uid();
     s.addEntity({ id, type: s.tool as 'room' | 'rect', layer, sceneId: s.activeSceneId, x, y, width: w, height: h, label: label || undefined, color: s.drawColor });
     s.setSelected(id);
@@ -349,7 +353,7 @@ export default function CanvasStage() {
     const cur = cursorRef.current ? snapPt(cursorRef.current) : null;
     if (s.tool === 'wall' || s.tool === 'line' || s.tool === 'dimension') {
       const len = parseLenToPx(dimText, s.unit);
-      if (len == null) { alert(`Can't parse "${dimText}". Try e.g. 10ft, 10'6", 3m, 250cm.`); return; }
+      if (len == null) { ui.toast(`Can't parse "${dimText}". Try e.g. 10ft, 10'6", 3m, 250cm.`, 'error'); return; }
       let ang = 0;
       if (cur && dist(a.x, a.y, cur.x, cur.y) > 0.001) ang = angleOf(a.x, a.y, cur.x, cur.y);
       const rawB = pointAt(a.x, a.y, ang, len);
@@ -358,12 +362,12 @@ export default function CanvasStage() {
     } else if (s.tool === 'room' || s.tool === 'rect') {
       const w = parseLenToPx(roomWText, s.unit);
       const h = parseLenToPx(roomHText, s.unit);
-      if (w == null || h == null) { alert('Enter width and height, e.g. 12ft x 10ft or 3.6m x 3m.'); return; }
+      if (w == null || h == null) { ui.toast('Enter width and height, e.g. 12ft x 10ft or 3.6m x 3m.', 'error'); return; }
       commitBox(a, w, h);
       setPending(null);
     } else if (s.tool === 'circle') {
       const r = parseLenToPx(dimText, s.unit);
-      if (r == null) { alert(`Can't parse radius "${dimText}".`); return; }
+      if (r == null) { ui.toast(`Can't parse radius "${dimText}".`, 'error'); return; }
       const id = uid();
       s.addEntity({ id, type: 'circle', layer: 'walls', sceneId: s.activeSceneId, x: a.x - r, y: a.y - r, width: r * 2, height: r * 2, color: s.drawColor });
       s.setSelected(id);
@@ -413,12 +417,10 @@ export default function CanvasStage() {
       }
       s.setSelected(id);
     } else if (s.tool === 'text') {
-      const label = prompt('Text?', 'Note');
-      if (label) {
-        const id = uid();
-        s.addEntity({ id, type: 'text', layer, sceneId: s.activeSceneId, x: p.x, y: p.y, label, fontSize: 16, color: s.drawColor });
-        s.setSelected(id);
-      }
+      // no blocking prompt: place with default text, editable right away via the Label field in Properties
+      const id = uid();
+      s.addEntity({ id, type: 'text', layer, sceneId: s.activeSceneId, x: p.x, y: p.y, label: 'Text', fontSize: 16, color: s.drawColor });
+      s.setSelected(id);
     }
   };
 
@@ -871,7 +873,7 @@ export default function CanvasStage() {
   const activeSceneName = s.scenes.find((sc) => sc.id === s.activeSceneId)?.name ?? 'Floor Plan';
 
   return (
-    <div ref={contRef} style={{ flex: 1, position: 'relative', background: '#f8fafc', overflow: 'hidden' }}>
+    <div ref={contRef} className="canvas-wrap">
       <Stage
         ref={stageRef}
         width={size.w || 800}
@@ -1048,43 +1050,43 @@ export default function CanvasStage() {
 
       {/* typed-dimension overlay */}
       {(showDimBox || showRoomBox || showDoorBox) && (
-        <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', background: 'white', border: '1px solid #bfdbfe', borderRadius: 10, padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, boxShadow: '0 4px 14px rgba(0,0,0,0.12)' }}>
+        <div className="canvas-float canvas-hud no-print">
           {showDimBox && (
             <>
-              <span style={{ color: '#1d4ed8', fontWeight: 600 }}>{s.tool === 'circle' ? 'Radius:' : 'Length:'}</span>
+              <span className="label accent">{s.tool === 'circle' ? 'Radius:' : 'Length:'}</span>
               <input
                 id="dim-input" value={dimText} onChange={(e) => setDimText(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') applyTyped(); if (e.key === 'Escape') setPending(null); e.stopPropagation(); }}
                 placeholder={dimHint} style={{ width: 130 }} autoFocus
               />
-              <button onClick={applyTyped}>Set ↵</button>
+              <button className="btn-primary btn-sm" onClick={applyTyped}>Set ↵</button>
             </>
           )}
           {showRoomBox && (
             <>
-              <span style={{ color: '#1d4ed8', fontWeight: 600 }}>W:</span>
+              <span className="label accent">W:</span>
               <input id="dim-w-input" value={roomWText} onChange={(e) => setRoomWText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyTyped(); e.stopPropagation(); }} placeholder={s.unit === 'ft' ? '12ft' : '3.6m'} style={{ width: 80 }} autoFocus />
-              <span style={{ color: '#1d4ed8', fontWeight: 600 }}>H:</span>
+              <span className="label accent">H:</span>
               <input id="dim-h-input" value={roomHText} onChange={(e) => setRoomHText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyTyped(); e.stopPropagation(); }} placeholder={s.unit === 'ft' ? '10ft' : '3m'} style={{ width: 80 }} />
-              <button onClick={applyTyped}>Set ↵</button>
+              <button className="btn-primary btn-sm" onClick={applyTyped}>Set ↵</button>
             </>
           )}
           {showDoorBox && (
             <>
-              <span style={{ color: '#92400e', fontWeight: 600 }}>{s.tool === 'door' ? 'Door' : 'Window'} W:</span>
+              <span className="label warn">{s.tool === 'door' ? 'Door' : 'Window'} W:</span>
               <input value={doorWText} onChange={(e) => setDoorWText(e.target.value)} placeholder={dimHint} style={{ width: 90 }} />
               {activeKind === 'elevation' ? (
                 <>
-                  <span style={{ color: '#92400e', fontWeight: 600 }}>H:</span>
+                  <span className="label warn">H:</span>
                   <input value={doorHText} onChange={(e) => setDoorHText(e.target.value)} placeholder={dimHint} style={{ width: 90 }} />
                 </>
               ) : (
                 <>
-                  <span style={{ color: '#92400e', fontWeight: 600 }}>Angle:</span>
+                  <span className="label warn">Angle:</span>
                   <input value={doorRotText} onChange={(e) => setDoorRotText(e.target.value)} placeholder="0" style={{ width: 55 }} />
                 </>
               )}
-              <span style={{ color: '#64748b', fontSize: 12 }}>click canvas to place</span>
+              <span className="hint">click canvas to place</span>
             </>
           )}
         </div>
@@ -1092,26 +1094,35 @@ export default function CanvasStage() {
 
       {/* furniture placement banner */}
       {s.pendingSymbol && ghostDef && (
-        <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', background: '#ede9fe', border: '1px solid #c4b5fd', borderRadius: 10, padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
+        <div className="canvas-float symbol-banner no-print">
           <span>{ghostDef.icon} Click canvas to place <b>{ghostDef.name}</b> ({ghostDef.size}) — click again for more, Esc when done</span>
-          <button onClick={() => s.setPendingSymbol(null)}>Done</button>
+          <button className="btn-sm" onClick={() => s.setPendingSymbol(null)}>Done</button>
         </div>
       )}
 
-      <div style={{ position: 'absolute', left: 10, bottom: 10, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 10px', fontSize: 12, color: '#475569' }}>
+      <div className="status-bar no-print">
         {s.tool} • {Math.round(cam.scale * 100)}% • snap {s.snap ? `${s.grid}px` : 'off'} • {activeSceneName} • scale 50px=1m
-        {pending && <span style={{ color: '#2563eb' }}> — type a dimension + Enter, or click second point (Esc cancels)</span>}
-        {s.tool === 'pen' && <span style={{ color: '#2563eb' }}> — draw freehand, release to finish (no snap)</span>}
-        {s.tool === 'autodim' && <span style={{ color: '#2563eb' }}> — click a wall/room/opening to pin its dimension, click again to remove (Esc exits)</span>}
-        {!pending && sel && ROTATABLE.has(sel.type) && <span style={{ color: '#2563eb' }}> — drag ⟳ to rotate, □ ends resize along axis (Alt frees), R rotates</span>}
+        {pending && <span className="accent"> — type a dimension + Enter, or click second point (Esc cancels)</span>}
+        {s.tool === 'pen' && <span className="accent"> — draw freehand, release to finish (no snap)</span>}
+        {s.tool === 'autodim' && <span className="accent"> — click a wall/room/opening to pin its dimension, click again to remove (Esc exits)</span>}
+        {!pending && sel && ROTATABLE.has(sel.type) && <span className="accent"> — drag ⟳ to rotate, □ ends resize along axis (Alt frees), R rotates</span>}
       </div>
-      <div style={{ position: 'absolute', right: 10, bottom: 10, display: 'flex', gap: 6 }}>
-        <button onClick={() => s.undo()} disabled={!s.past.length} title="Undo (Ctrl+Z)">↩</button>
-        <button onClick={() => s.redo()} disabled={!s.future.length} title="Redo (Ctrl+Shift+Z)">↪</button>
-        <button onClick={() => setCam({ x: 0, y: 0, scale: 1 })}>Reset view</button>
-        <button onClick={() => setCam((c) => ({ ...c, scale: Math.min(4, c.scale * 1.2) }))}>+</button>
-        <button onClick={() => setCam((c) => ({ ...c, scale: Math.max(0.2, c.scale / 1.2) }))}>−</button>
+      <div className="zoom-controls no-print">
+        <button className="btn-icon" onClick={() => s.undo()} disabled={!s.past.length} title="Undo (Ctrl+Z)">↩</button>
+        <button className="btn-icon" onClick={() => s.redo()} disabled={!s.future.length} title="Redo (Ctrl+Shift+Z)">↪</button>
+        <button onClick={() => setCam({ x: 0, y: 0, scale: 1 })} title="Reset view">Reset</button>
+        <button className="btn-icon" onClick={() => setCam((c) => ({ ...c, scale: Math.min(4, c.scale * 1.2) }))} title="Zoom in">+</button>
+        <button className="btn-icon" onClick={() => setCam((c) => ({ ...c, scale: Math.max(0.2, c.scale / 1.2) }))} title="Zoom out">−</button>
       </div>
+      {sel && !ui.panelOpen && (
+        <button
+          className="btn-primary mobile-select-fab no-print"
+          onClick={() => useUI.getState().setPanelOpen(true)}
+          title="Edit properties"
+        >
+          ✏️ Edit
+        </button>
+      )}
     </div>
   );
 }

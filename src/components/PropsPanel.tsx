@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../store';
+import { useUI } from '../lib/ui';
 import {
   fmtLen, roomArea, normalizeAngle, angleOf, rotateSegment, setSegmentLength, pathLen,
   parseLenToPx, parseCoordToPx, parseThicknessToPx, thicknessToUnitNum, thicknessUnitLabel, lenToUnitNum,
@@ -30,11 +31,12 @@ function Field({ label, defaultValue, onCommit, width = 80, hint }: {
 
 function ColorRow({ value, onPick }: { value: string; onPick: (c: string, transient: boolean) => void }) {
   return (
-    <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+    <div className="swatches">
       {SWATCHES.map((c) => (
         <button
           key={c} title={c} onClick={() => onPick(c, false)}
-          style={{ width: 22, height: 22, borderRadius: 6, padding: 0, background: c, border: value === c ? '2px solid #2563eb' : '1px solid #cbd5e1' }}
+          className={`swatch${value === c ? ' active' : ''}`}
+          style={{ background: c }}
         />
       ))}
       <input
@@ -42,7 +44,7 @@ function ColorRow({ value, onPick }: { value: string; onPick: (c: string, transi
         title="Custom color"
         onFocus={() => useStore.getState().checkpoint()}
         onChange={(e) => onPick(e.target.value, true)}
-        style={{ width: 30, height: 24, padding: 0, border: '1px solid #cbd5e1', borderRadius: 6 }}
+        style={{ width: 30, height: 26, padding: 0, borderRadius: 6 }}
       />
     </div>
   );
@@ -66,19 +68,20 @@ function RotateRow({ value, onSet }: { value: number; onSet: (deg: number, trans
           onBlur={(e) => { const n = parseFloat(e.target.value); if (Number.isFinite(n)) onSet(n); }}
         />°
       </label>
-      <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
+      <div className="field-row" style={{ marginTop: 4 }}>
         {[0, 45, 90, 135, 180, 270].map((a) => (
-          <button key={a} onClick={() => onSet(a)} title={`Set ${a}°`} style={v === a ? { background: '#dbeafe' } : {}}>{a}°</button>
+          <button key={a} className="btn-sm" onClick={() => onSet(a)} title={`Set ${a}°`} style={v === a ? { background: 'var(--accent-soft)', borderColor: 'var(--accent)' } : {}}>{a}°</button>
         ))}
-        <button onClick={() => onSet(v + 15)} title="Rotate +15° (same as R key)">+15°</button>
-        <button onClick={() => onSet(v + 180)} title="Flip 180°">Flip</button>
+        <button className="btn-sm" onClick={() => onSet(v + 15)} title="Rotate +15° (same as R key)">+15°</button>
+        <button className="btn-sm" onClick={() => onSet(v + 180)} title="Flip 180°">Flip</button>
       </div>
     </div>
   );
 }
 
-export default function PropsPanel() {
+export default function PropsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const s = useStore();
+  const ui = useUI();
   const sceneEntities = s.entities.filter((e) => (e.sceneId ?? 'plan') === s.activeSceneId);
   const sel = sceneEntities.find((e) => e.id === s.selectedId) ?? null;
   const unitSuffix = s.unit === 'm' ? 'm / cm' : 'ft / in';
@@ -88,21 +91,24 @@ export default function PropsPanel() {
   // furniture library starts collapsed to keep the panel tidy
   const [showFurniture, setShowFurniture] = useState(false);
 
-  const badLen = (v: string) => alert(`Can't parse "${v}". Try e.g. ${s.unit === 'ft' ? `10ft, 10'6", 36in` : '3m, 250cm'}.`);
+  const badLen = (v: string) => ui.toast(`Can't parse "${v}". Try e.g. ${s.unit === 'ft' ? `10ft, 10'6", 36in` : '3m, 250cm'}.`, 'error');
 
   return (
-    <div className="no-print" style={{ width: 260, flexShrink: 0, minHeight: 0, background: 'white', borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', fontSize: 13 }}>
-      <div style={{ padding: 10, borderBottom: '1px solid #f1f5f9' }}>
-        <div style={{ fontWeight: 700, marginBottom: 6 }}>Sketch settings</div>
-        <div style={{ marginBottom: 6 }}>
-          <div style={{ marginBottom: 4, color: '#475569' }}>Pen / line color</div>
+    <div className={`panel no-print${open ? ' open' : ''}`}>
+      <div className="panel-section">
+        <div className="panel-head-row">
+          <div className="panel-title" style={{ marginBottom: 0 }}>Sketch settings</div>
+          <button className="panel-close btn-icon btn-ghost" onClick={onClose} aria-label="Close properties">✕</button>
+        </div>
+        <div style={{ margin: '10px 0 6px' }}>
+          <div style={{ marginBottom: 4, color: 'var(--text-muted)' }}>Pen / line color</div>
           <ColorRow value={s.drawColor} onPick={(c) => s.setDrawColor(c)} />
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="field-row">
           <label>Unit: <select value={s.unit} onChange={(e) => s.setUnit(e.target.value as 'm' | 'ft')}><option value="ft">feet/in</option><option value="m">meters/cm</option></select></label>
           <label>Pen: <input type="number" value={s.penWidth} min={1} max={20} onChange={(e) => s.setPenWidth(+e.target.value)} style={{ width: 52 }} /> px</label>
         </div>
-        <div style={{ marginTop: 6 }}>
+        <div style={{ marginTop: 8 }}>
           <Field
             label="Wall thickness" width={70} hint={thicknessUnitLabel(s.unit)}
             defaultValue={thicknessToUnitNum(s.wallThickness, s.unit)}
@@ -112,56 +118,53 @@ export default function PropsPanel() {
               s.setWallThickness(Math.round(n * 100) / 100);
             }}
           />
-          <span style={{ color: '#64748b', fontSize: 11 }}> {s.unit === 'ft' ? 'inch' : 'cm'} • new walls</span>
+          <span className="field-sub"> {s.unit === 'ft' ? 'inch' : 'cm'} • new walls</span>
         </div>
-        <div style={{ marginTop: 6, display: 'flex', gap: 8 }}>
+        <div className="field-row" style={{ marginTop: 8 }}>
           <label><input type="checkbox" checked={s.snap} onChange={(e) => s.setSnap(e.target.checked)} /> Snap</label>
           <label><input type="checkbox" checked={s.showGrid} onChange={(e) => s.setShowGrid(e.target.checked)} /> Grid</label>
         </div>
-        <div style={{ marginTop: 6 }}><label>Grid step: <input type="number" value={s.grid} min={1} max={100} onChange={(e) => s.setGrid(+e.target.value)} style={{ width: 60 }} /> px</label></div>
+        <div style={{ marginTop: 8 }}><label>Grid step: <input type="number" value={s.grid} min={1} max={100} onChange={(e) => s.setGrid(+e.target.value)} style={{ width: 60 }} /> px</label></div>
       </div>
 
-      <div style={{ padding: 10, borderBottom: '1px solid #f1f5f9' }}>
-        <button
-          onClick={() => setShowFurniture((v) => !v)}
-          title="Show/hide the furniture library"
-          style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13, color: '#0f172a', width: '100%', textAlign: 'left' }}
-        >
-          <span style={{ width: 14 }}>{showFurniture ? '▼' : '▶'}</span>
-          <span>🪑 Furniture & Kitchen</span>
-          <span style={{ fontWeight: 400, color: '#64748b', fontSize: 11 }}>(click, then click canvas)</span>
+      <div className="panel-section">
+        <button className="collapse-trigger" onClick={() => setShowFurniture((v) => !v)} title="Show/hide the furniture library">
+          <span className="chev">{showFurniture ? '▼' : '▶'}</span>
+          <span>🪑 Furniture &amp; Kitchen</span>
+          <span className="muted">(click, then click canvas)</span>
         </button>
         {showFurniture && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4, marginTop: 6 }}>
-          {SYMBOLS.map((sym) => (
-            <button
-              key={sym.id} title={`${sym.name} — real size ${sym.size}`}
-              onClick={() => { s.setTool('select'); s.setPendingSymbol(sym.id); }}
-              style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '6px 2px',
-                background: s.pendingSymbol === sym.id ? '#ede9fe' : '#f8fafc',
-                border: s.pendingSymbol === sym.id ? '2px solid #7c3aed' : '1px solid #e2e8f0',
-              }}
-            >
-              <span style={{ fontSize: 18 }}>{sym.icon}</span>
-              <span style={{ fontSize: 10, lineHeight: 1.2, textAlign: 'center' }}>{sym.name}</span>
-            </button>
-          ))}
-        </div>
+          <div className="symbol-grid">
+            {SYMBOLS.map((sym) => (
+              <button
+                key={sym.id} title={`${sym.name} — real size ${sym.size}`}
+                onClick={() => { s.setTool('select'); s.setPendingSymbol(sym.id); }}
+                className={`symbol-tile${s.pendingSymbol === sym.id ? ' active' : ''}`}
+              >
+                <span className="icon">{sym.icon}</span>
+                <span>{sym.name}</span>
+              </button>
+            ))}
+          </div>
         )}
         {s.pendingSymbol && (
-          <div style={{ marginTop: 6, fontSize: 12, color: '#6d28d9' }}>
-            Placing <b>{SYMBOL_MAP[s.pendingSymbol]?.name}</b> ({SYMBOL_MAP[s.pendingSymbol]?.size}) — click canvas, Esc to stop.{' '}
-            <button onClick={() => s.setPendingSymbol(null)}>Done</button>
+          <div className="field-row" style={{ marginTop: 8, fontSize: 12, color: '#6d28d9' }}>
+            <span>Placing <b>{SYMBOL_MAP[s.pendingSymbol]?.name}</b> ({SYMBOL_MAP[s.pendingSymbol]?.size}) — click canvas, Esc to stop.</span>
+            <button className="btn-sm" onClick={() => s.setPendingSymbol(null)}>Done</button>
           </div>
         )}
       </div>
 
-      <div style={{ padding: 10, flex: 1, minHeight: 0, overflowY: 'auto' }}>
-        <div style={{ fontWeight: 700, marginBottom: 6 }}>Properties {sel ? `— ${sel.type === 'symbol' ? SYMBOL_MAP[sel.symbol ?? '']?.name ?? sel.type : sel.type}` : ''}</div>
-        {!sel && <div style={{ color: '#64748b' }}>Select an object to edit exact sizes and colors. Use ✏️ Pen for freehand sketching. Ctrl+Z undo, Ctrl+Shift+Z redo.</div>}
+      <div className="panel-scroll">
+        <div className="panel-title">Properties {sel ? `— ${sel.type === 'symbol' ? SYMBOL_MAP[sel.symbol ?? '']?.name ?? sel.type : sel.type}` : ''}</div>
+        {!sel && (
+          <div className="panel-empty">
+            Select an object on the canvas to edit exact sizes and colors.{' '}
+            Use ✏️ Pen for freehand sketching. <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> redo.
+          </div>
+        )}
         {sel && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} key={sel.id}>
+          <div className="field-col" key={sel.id}>
             {(sel.label !== undefined || sel.type === 'text' || sel.type === 'room') && (
               <label>Label: <input defaultValue={sel.label ?? ''} key={'lb' + (sel.label ?? '')}
                 onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); e.stopPropagation(); }}
@@ -169,13 +172,13 @@ export default function PropsPanel() {
             )}
 
             <div>
-              <div style={{ marginBottom: 4, color: '#475569' }}>Color</div>
+              <div style={{ marginBottom: 4, color: 'var(--text-muted)' }}>Color</div>
               <ColorRow value={sel.color ?? '#111827'} onPick={(c, t) => s.updateEntity(sel.id, { color: c }, t)} />
             </div>
 
             {/* position */}
             {(sel.x !== undefined) && (
-              <div style={{ display: 'flex', gap: 6 }}>
+              <div className="field-row">
                 <Field label="X" width={64} hint={`Position in ${unitSuffix}`} defaultValue={lenToUnitNum(sel.x, s.unit)}
                   onCommit={(v) => { const n = parseCoordToPx(v, s.unit); if (n == null) return badLen(v); s.updateEntity(sel.id, { x: Math.round(n * 10) / 10 }); }} />
                 <Field label="Y" width={64} hint={`Position in ${unitSuffix}`} defaultValue={lenToUnitNum(sel.y ?? 0, s.unit)}
@@ -186,8 +189,8 @@ export default function PropsPanel() {
             {/* linear entities: exact length + angle */}
             {sel.points && sel.points.length === 4 && (
               <>
-                <div style={{ color: '#475569' }}>
-                  Length: {fmtLen(Math.hypot(sel.points[2] - sel.points[0], sel.points[3] - sel.points[1]), s.unit)}
+                <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                  {fmtLen(Math.hypot(sel.points[2] - sel.points[0], sel.points[3] - sel.points[1]), s.unit)}
                   {' '}∠ {Math.round(normalizeAngle(angleOf(sel.points[0], sel.points[1], sel.points[2], sel.points[3])))}°
                 </div>
                 <Field label={`Length (${unitSuffix})`} width={90} defaultValue={lenToUnitNum(Math.hypot(sel.points[2] - sel.points[0], sel.points[3] - sel.points[1]), s.unit)}
@@ -200,7 +203,7 @@ export default function PropsPanel() {
             {/* freehand sketch */}
             {sel.type === 'freehand' && sel.points && (
               <>
-                <div style={{ color: '#475569' }}>Sketch length: {fmtLen(pathLen(sel.points), s.unit)}</div>
+                <div className="field-sub">Sketch length: {fmtLen(pathLen(sel.points), s.unit)}</div>
                 <Field label="Stroke px" width={64} defaultValue={sel.thickness ?? 3}
                   onCommit={(v) => { const n = parseFloat(v); if (Number.isFinite(n)) s.updateEntity(sel.id, { thickness: n }); }} />
               </>
@@ -209,9 +212,9 @@ export default function PropsPanel() {
             {/* boxes: exact W/H */}
             {(sel.type === 'room' || sel.type === 'rect' || sel.type === 'symbol') && (
               <>
-                {sel.type === 'room' && <div style={{ color: '#475569' }}>Area: {roomArea(sel.width ?? 0, sel.height ?? 0, s.unit)}</div>}
-                {sel.type === 'symbol' && <div style={{ color: '#475569' }}>Real size: {SYMBOL_MAP[sel.symbol ?? '']?.size ?? ''} (resize scales drawing)</div>}
-                <div style={{ display: 'flex', gap: 6 }}>
+                {sel.type === 'room' && <div className="field-sub">Area: {roomArea(sel.width ?? 0, sel.height ?? 0, s.unit)}</div>}
+                {sel.type === 'symbol' && <div className="field-sub">Real size: {SYMBOL_MAP[sel.symbol ?? '']?.size ?? ''} (resize scales drawing)</div>}
+                <div className="field-row">
                   <Field label={`W (${unitSuffix})`} width={70} defaultValue={lenToUnitNum(sel.width ?? 0, s.unit)}
                     onCommit={(v) => { const n = parseLenToPx(v, s.unit); if (n == null) return badLen(v); s.updateEntity(sel.id, { width: Math.round(n * 10) / 10 }); }} />
                   <Field label={`H (${unitSuffix})`} width={70} defaultValue={lenToUnitNum(sel.height ?? 0, s.unit)}
@@ -222,7 +225,7 @@ export default function PropsPanel() {
 
             {/* door/window width + height (height matters on elevation views) */}
             {(sel.type === 'door' || sel.type === 'window') && (
-              <div style={{ display: 'flex', gap: 6 }}>
+              <div className="field-row">
                 <Field label={`Width (${unitSuffix})`} width={80} defaultValue={lenToUnitNum(sel.width ?? 60, s.unit)}
                   onCommit={(v) => { const n = parseLenToPx(v, s.unit); if (n == null) return badLen(v); s.updateEntity(sel.id, { width: Math.round(n * 10) / 10 }); }} />
                 <Field label={`Height (${unitSuffix})`} width={80} hint="Used when this door/window is drawn on an elevation view"
@@ -254,36 +257,37 @@ export default function PropsPanel() {
                     s.updateEntity(sel.id, { thickness: Math.round(n * 100) / 100 });
                   }}
                 />
-                <span style={{ color: '#64748b', fontSize: 11 }}> {s.unit === 'ft' ? 'inch' : 'cm'}</span>
+                <span className="field-sub"> {s.unit === 'ft' ? 'inch' : 'cm'}</span>
               </div>
             )}
             {sel.type === 'text' && <Field label="Font size" width={64} defaultValue={sel.fontSize ?? 16} onCommit={(v) => { const n = parseFloat(v); if (Number.isFinite(n)) s.updateEntity(sel.id, { fontSize: n }); }} />}
             {/* touch nudge pad: arrow-key nudging for tablets (no keyboard) */}
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ color: '#475569' }}>Nudge</span>
+              <div className="field-row" style={{ marginBottom: 4 }}>
+                <span style={{ color: 'var(--text-muted)' }}>Nudge</span>
                 <button
+                  className="btn-sm"
                   title={nudgeBig ? 'Tap for 1px steps' : `Tap for ${s.grid || 10}px steps`}
                   onClick={() => setNudgeBig((v) => !v)}
-                  style={nudgeBig ? { background: '#dbeafe' } : {}}
+                  style={nudgeBig ? { background: 'var(--accent-soft)', borderColor: 'var(--accent)' } : {}}
                 >
                   step: {nudgeBig ? `${s.grid || 10}px` : '1px'}
                 </button>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                <button onClick={() => s.nudge(0, -nudgeStep)} style={{ width: 64 }} title="Nudge up">↑</button>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <button onClick={() => s.nudge(-nudgeStep, 0)} style={{ width: 64 }} title="Nudge left">←</button>
-                  <button onClick={() => s.nudge(nudgeStep, 0)} style={{ width: 64 }} title="Nudge right">→</button>
+              <div className="nudge-pad">
+                <button onClick={() => s.nudge(0, -nudgeStep)} title="Nudge up">↑</button>
+                <div className="row">
+                  <button onClick={() => s.nudge(-nudgeStep, 0)} title="Nudge left">←</button>
+                  <button onClick={() => s.nudge(nudgeStep, 0)} title="Nudge right">→</button>
                 </div>
-                <button onClick={() => s.nudge(0, nudgeStep)} style={{ width: 64 }} title="Nudge down">↓</button>
+                <button onClick={() => s.nudge(0, nudgeStep)} title="Nudge down">↓</button>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-              <button onClick={() => { navigator.clipboard.writeText(JSON.stringify(sel)); }}>Copy JSON</button>
-              <button onClick={() => s.removeEntity(sel.id)} style={{ color: 'red' }}>Delete</button>
+            <div className="field-row" style={{ marginTop: 4 }}>
+              <button className="btn-sm" onClick={() => { navigator.clipboard.writeText(JSON.stringify(sel)); ui.toast('Copied entity JSON to clipboard', 'success'); }}>Copy JSON</button>
+              <button className="btn-sm btn-danger" onClick={() => s.removeEntity(sel.id)}>Delete</button>
             </div>
-            <div style={{ fontSize: 11, color: '#64748b' }}>id: {sel.id} • Tip: drag the ⟳ handle on canvas, or press R (+Shift = 90°)</div>
+            <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>id: {sel.id} • Tip: drag the ⟳ handle on canvas, or press R (+Shift = 90°)</div>
           </div>
         )}
       </div>

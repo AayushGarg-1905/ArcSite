@@ -5,6 +5,7 @@ import { LocalBackend } from './lib/storeLocal';
 import { CloudBackend, CLOUD_READY } from './lib/cloud';
 import { captureStage, makeThumb, newProjectId, DEFAULT_SCENES, type ProjectMeta } from './lib/projects';
 import { autoDimensions } from './lib/autodim';
+import { useUI } from './lib/ui';
 
 const MAX_HISTORY = 60;
 
@@ -168,7 +169,7 @@ async function persistNow(): Promise<void> {
       backend
         .list()
         .then((list) => useStore.setState({ projects: list }))
-        .catch(() => {});
+        .catch(() => { });
     }
   } catch {
     useStore.setState({ saveStatus: 'error' });
@@ -381,7 +382,7 @@ export const useStore = create<State>()((set, get) => ({
         id: newProjectId(), name: name.trim() || 'Untitled House',
         createdAt: now, updatedAt: now, entityCount: 0,
       };
-      await backend.save(meta, [], DEFAULT_SCENES).catch(() => alert('Could not create project.'));
+      await backend.save(meta, [], DEFAULT_SCENES).catch(() => useUI.getState().toast('Could not create project.', 'error'));
       const list = await backend.list().catch(() => [meta]);
       set({
         entities: [], scenes: DEFAULT_SCENES, activeSceneId: 'plan',
@@ -398,7 +399,7 @@ export const useStore = create<State>()((set, get) => ({
       const backend = backendFor(s.backendTab, s.uid);
       const data = await backend.load(id).catch(() => null);
       if (data == null) {
-        alert('Could not open project.');
+        useUI.getState().toast('Could not open project.', 'error');
         return;
       }
       const list = await backend.list().catch(() => [] as ProjectMeta[]);
@@ -454,7 +455,7 @@ export const useStore = create<State>()((set, get) => ({
     void (async () => {
       const s = get();
       const backend = backendFor(s.backendTab, s.uid);
-      await backend.remove(id).catch(() => alert('Delete failed.'));
+      await backend.remove(id).catch(() => useUI.getState().toast('Delete failed.', 'error'));
       const list = await backend.list().catch(() => [] as ProjectMeta[]);
       set({ projects: list });
       if (s.currentId === id) {
@@ -467,7 +468,7 @@ export const useStore = create<State>()((set, get) => ({
     void (async () => {
       const s = get();
       if (!s.uid) {
-        alert('Sign in first to upload to cloud.');
+        useUI.getState().toast('Sign in first to upload to cloud.', 'error');
         return;
       }
       const [data, list] = await Promise.all([
@@ -478,8 +479,8 @@ export const useStore = create<State>()((set, get) => ({
       if (!prev || data == null) return;
       await backendFor('cloud', s.uid)
         .save({ ...prev, updatedAt: Date.now() }, data.entities, data.scenes)
-        .catch(() => alert('Upload failed — check connection.'));
-      alert(`Uploaded "${prev.name}" to cloud. Sign in on your other device to open it.`);
+        .catch(() => useUI.getState().toast('Upload failed — check connection.', 'error'));
+      useUI.getState().toast(`Uploaded "${prev.name}" to cloud — sign in on your other device to open it.`, 'success');
       if (s.backendTab === 'cloud') get().refreshProjects();
     })();
   },

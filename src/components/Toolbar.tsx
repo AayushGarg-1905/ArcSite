@@ -1,32 +1,37 @@
 import { useStore } from '../store';
 import type { ToolId } from '../types';
 
-const TOOLS: { id: ToolId; label: string; hint: string }[] = [
-  { id: 'select', label: '⬚ Select', hint: 'Move, drag □ handles to resize, ⟳ handle or R to rotate' },
-  { id: 'pan', label: '✋ Pan', hint: 'Drag canvas, wheel = zoom' },
-  { id: 'wall', label: '🧱 Wall', hint: 'Click 2 points' },
-  { id: 'room', label: '▦ Room', hint: 'Drag 2 corners, auto area' },
-  { id: 'door', label: '🚪 Door', hint: 'Click to place + rotation' },
-  { id: 'window', label: '🪟 Window', hint: 'Click to place' },
-  { id: 'dimension', label: '📏 Dimension', hint: 'Click 2 points' },
-  { id: 'autodim', label: '📐 Auto-dim', hint: 'Click a wall/room/opening to pin its measurement — click again to remove, Esc exits' },
-  { id: 'line', label: '╱ Line', hint: 'Click 2 points' },
-  { id: 'rect', label: '▢ Rect', hint: 'Drag 2 corners' },
-  { id: 'circle', label: '◯ Circle', hint: 'Center + radius' },
-  { id: 'pen', label: '✏️ Freehand', hint: 'Draw freehand sketch (no snap), release to finish' },
-  { id: 'text', label: 'T Text', hint: 'Click to place' },
-  { id: 'eraser', label: '⌫ Erase', hint: 'Click entity to delete' },
+const TOOLS: { id: ToolId; label: string; icon: string; hint: string }[] = [
+  { id: 'select', label: 'Select', icon: '⬚', hint: 'Move, drag □ handles to resize, ⟳ handle or R to rotate' },
+  { id: 'pan', label: 'Pan', icon: '✋', hint: 'Drag canvas, wheel = zoom' },
+  { id: 'wall', label: 'Wall', icon: '🧱', hint: 'Click 2 points' },
+  { id: 'room', label: 'Room', icon: '▦', hint: 'Drag 2 corners, auto area' },
+  { id: 'door', label: 'Door', icon: '🚪', hint: 'Click to place + rotation' },
+  { id: 'window', label: 'Window', icon: '🪟', hint: 'Click to place' },
+  { id: 'dimension', label: 'Dimension', icon: '📏', hint: 'Click 2 points' },
+  { id: 'autodim', label: 'Auto-dim', icon: '📐', hint: 'Click a wall/room/opening to pin its measurement — click again to remove, Esc exits' },
+  { id: 'line', label: 'Line', icon: '╱', hint: 'Click 2 points' },
+  { id: 'rect', label: 'Rect', icon: '▢', hint: 'Drag 2 corners' },
+  { id: 'circle', label: 'Circle', icon: '◯', hint: 'Center + radius' },
+  { id: 'pen', label: 'Freehand', icon: '✏️', hint: 'Draw freehand sketch (no snap), release to finish' },
+  { id: 'text', label: 'Text', icon: 'T', hint: 'Click to place' },
+  { id: 'eraser', label: 'Erase', icon: '⌫', hint: 'Click entity to delete' },
 ];
 
-export default function Toolbar() {
+export default function Toolbar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const s = useStore();
   const { tool, setTool } = s;
   return (
-    <div className="no-print" style={{ width: 148, flexShrink: 0, minHeight: 0, overflowY: 'auto', background: '#0f172a', color: 'white', display: 'flex', flexDirection: 'column', padding: 8, gap: 4 }}>
-      <div style={{ fontSize: 12, opacity: 0.7, padding: '4px 6px' }}>TOOLS</div>
+    <div className={`rail no-print${open ? ' open' : ''}`} role="toolbar" aria-label="Drawing tools">
+      <div className="rail-header">
+        <span className="rail-section-label" style={{ padding: 0 }}>TOOLS</span>
+        <button className="rail-close btn-icon btn-ghost" onClick={onClose} aria-label="Close tools" style={{ color: 'var(--text-on-ink)' }}>✕</button>
+      </div>
+      <div className="rail-section-label desktop-only">TOOLS</div>
       {TOOLS.map((t) => (
         <button
           key={t.id}
+          className={`rail-btn${tool === t.id ? ' active' : ''}`}
           title={t.hint + ' — tap again to put the tool down (like Esc)'}
           onClick={() => {
             if (t.id === tool) {
@@ -35,17 +40,17 @@ export default function Toolbar() {
               else s.setSelected(null);
               s.cancelAll();
             } else setTool(t.id);
-          }}
-          style={{
-            textAlign: 'left', padding: '7px 9px', borderRadius: 8, border: 'none', cursor: 'pointer',
-            background: tool === t.id ? '#2563eb' : 'transparent', color: 'white', fontSize: 13,
+            if (window.matchMedia('(max-width: 1023.98px)').matches) onClose();
           }}
         >
-          {t.label}
+          <span className="ic">{t.icon}</span>
+          <span>{t.label}</span>
         </button>
       ))}
-      <div style={{ marginTop: 'auto', fontSize: 11, opacity: 0.6, padding: 6, lineHeight: 1.5 }}>
-        Wall: 2 clicks<br />Room: drag corners<br />Pen: draw & release<br />Pinch: zoom, 2-finger: pan<br />Tap armed tool again: exit tool<br />R: rotate selected<br />Ctrl+Z: undo
+      <div className="rail-footer">
+        Wall: 2 clicks<br />Room: drag corners<br />Pen: draw &amp; release<br />Pinch: zoom, 2-finger: pan<br />
+        Tap armed tool again: exit tool<br />
+        <kbd>R</kbd> rotate selected · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo
       </div>
     </div>
   );
